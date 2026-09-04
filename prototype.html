@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TraceMail — Email Threat &amp; Forensic Intelligence</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="shell">
+
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">
+          <svg viewBox="0 0 30 30" fill="none">
+            <path d="M4 8 L15 15 L26 8" stroke="#4A7A47" stroke-width="1.6" fill="none" />
+            <rect x="4" y="8" width="22" height="16" rx="1.5" stroke="#4A7A47" stroke-width="1.6" />
+            <circle cx="22" cy="20" r="4.5" fill="#081426" stroke="#4A7A47" stroke-width="1.4" />
+            <path d="M20.3 20 l1.3 1.3 l2.4 -2.6" stroke="#4A7A47" stroke-width="1.2" fill="none" />
+          </svg>
+        </div>
+        <div>
+          <div class="brand-name">TRACEMAIL</div>
+          <div class="brand-sub">SIH26106 · FORENSIC INTEL</div>
+        </div>
+      </div>
+
+      <div class="side-block">
+        <div class="side-label">UPLOAD EMAIL</div>
+        <div class="dropzone" id="dropzone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 3v12m0-12l-4 4m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+          </svg>
+          <p>Drop a <span class="mono">.eml</span> file or click to browse</p>
+          <div class="fname" id="fname"></div>
+        </div>
+        <input type="file" id="fileInput" accept=".eml,.txt,message/rfc822">
+      </div>
+
+      <div class="side-block">
+        <div class="side-label">OR PASTE RAW SOURCE</div>
+        <textarea class="pasteArea" id="pasteArea"
+          placeholder="Paste full raw email headers + body (View Source / Show Original)..."></textarea>
+      </div>
+
+      <button class="btn btn-primary" id="analyzeBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M21 21l-4.3-4.3" />
+        </svg>
+        Analyze Email
+      </button>
+
+      <div class="side-divider"></div>
+
+      <div class="side-block">
+        <div class="side-label">DEMO SAMPLES</div>
+        <button class="btn sample-btn" data-sample="phish"><span class="dot"
+            style="background:var(--critical)"></span>Impersonation / phishing.eml</button>
+        <button class="btn sample-btn" data-sample="clean"><span class="dot"
+            style="background:var(--safe)"></span>Legitimate / receipt.eml</button>
+      </div>
+
+      <button class="btn btn-ghost" id="resetBtn" style="margin-top:-8px;">↺ Start new investigation</button>
+
+      <div class="side-foot">
+        <b>MVP scope</b><br>
+        Parsing, SPF/DKIM/DMARC, URL &amp; IP extraction, hybrid AI+rules scoring, IOC extraction, GeoLocation
+        (approximate), forensic report export. All analysis runs locally in this browser — no attachment is ever
+        executed.
+      </div>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <main class="main">
+      <div class="topbar">
+        <h1>Investigation Console</h1>
+        <div class="case-id" id="caseId">NO ACTIVE CASE</div>
+      </div>
+
+      <div id="emptyState" class="empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
+          <rect x="3" y="5" width="18" height="14" rx="1" />
+          <path d="M3 6l9 7 9-7" />
+        </svg>
+        <h2>No email loaded</h2>
+        <p>Upload a <span class="mono">.eml</span> file, paste raw source, or load a demo sample from the left panel to
+          begin a threat &amp; forensic investigation.</p>
+      </div>
+
+      <div id="results" style="display:none;">
+
+        <!-- result strip -->
+        <div class="result-strip">
+          <div class="rs-cell" style="min-width:150px;">
+            <div class="rs-label">CLASSIFICATION</div>
+            <div class="class-tag" id="rClass">—</div>
+          </div>
+          <div class="rs-cell" style="border-right:none;">
+            <div class="rs-label">SEVERITY</div>
+            <div class="sev-badge" id="rSeverity"><span class="sev-dot"></span>—</div>
+          </div>
+          <div class="rs-cell" style="text-align:right;">
+            <div class="rs-label">RISK SCORE</div>
+            <div class="rs-value" id="rScore">0<span style="font-size:12px;color:var(--text-faint);">/100</span></div>
+          </div>
+          <div class="rs-cell" style="text-align:right;">
+            <div class="rs-label">CONFIDENCE</div>
+            <div class="rs-value small" id="rConfidence">—</div>
+          </div>
+        </div>
+
+        <div class="grid cols-2">
+          <!-- Sender intelligence -->
+          <div class="panel">
+            <div class="panel-head">
+              <h3>SENDER INTELLIGENCE</h3>
+            </div>
+            <div class="panel-body">
+              <dl class="kv" id="senderKv"></dl>
+            </div>
+          </div>
+
+          <!-- Authentication -->
+          <div class="panel">
+            <div class="panel-head">
+              <h3>EMAIL AUTHENTICATION</h3>
+            </div>
+            <div class="panel-body" id="authBody"></div>
+          </div>
+        </div>
+
+        <div class="grid cols-2" style="margin-top:16px;">
+          <!-- Indicators -->
+          <div class="panel">
+            <div class="panel-head">
+              <h3>THREAT INDICATORS</h3><span class="hint" id="indCount"></span>
+            </div>
+            <div class="panel-body" id="indicatorsBody"></div>
+          </div>
+
+          <!-- Attack graph -->
+          <div class="panel">
+            <div class="panel-head">
+              <h3>ATTACK INFRASTRUCTURE GRAPH</h3>
+            </div>
+            <div class="panel-body"><svg id="graph" viewBox="0 0 560 270"></svg></div>
+          </div>
+        </div>
+
+        <div class="grid cols-2" style="margin-top:16px;">
+          <!-- Geolocation -->
+          <div class="panel">
+            <div class="panel-head">
+              <h3>GEOLOCATION — ATTACK INFRASTRUCTURE</h3>
+            </div>
+            <div id="map"></div>
+            <div class="map-note">Approximate infrastructure location derived from IP/ASN enrichment — not the
+              attacker's physical location. Private/local IPs excluded.</div>
+          </div>
+
+          <!-- IOCs -->
+          <div class="panel">
+            <div class="panel-head">
+              <h3>EXTRACTED IOCs</h3><span class="hint">Click to copy</span>
+            </div>
+            <div class="ioc-tabs" id="iocTabs"></div>
+            <div class="ioc-list" id="iocList"></div>
+          </div>
+        </div>
+
+        <div class="grid cols-2" style="margin-top:16px;">
+          <!-- AI Explanation -->
+          <div class="panel">
+            <div class="panel-head">
+              <h3>AI EXPLANATION</h3>
+            </div>
+            <div class="panel-body" id="explainBody"></div>
+          </div>
+
+          <!-- Forensic timeline -->
+          <div class="panel">
+            <div class="panel-head">
+              <h3>FORENSIC TIMELINE</h3>
+            </div>
+            <div class="panel-body">
+              <div class="timeline" id="timelineBody"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Investigation assistant -->
+        <div class="panel" style="margin-top:16px;">
+          <div class="panel-head">
+            <h3>INVESTIGATION ASSISTANT</h3><span class="hint">Evidence-grounded, no external model</span>
+          </div>
+          <div class="panel-body">
+            <div class="qa-presets" id="qaPresets"></div>
+            <div class="qa-log" id="qaLog"></div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn" id="exportJson">⭳ Export JSON</button>
+          <button class="btn" id="exportReport">🖶 Export / Print Report</button>
+        </div>
+
+        <div class="disclaimer">
+          Prototype build for SIH26106. Threat scoring uses a transparent hybrid of rule-based indicators
+          (SPF/DKIM/DMARC, Reply-To mismatch, look-alike domains, URL heuristics, attachment metadata, language cues)
+          combined into a capped 0–100 score — the same architecture the full platform would extend with a trained NLP
+          classifier and live threat-intel/ASN feeds. GeoIP is simulated in this build for demo reliability; attachments
+          are parsed for metadata/hash only and are never executed.
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="script.js"></script>
+</body>
+
+</html>
